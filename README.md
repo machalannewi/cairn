@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cairn
 
-## Getting Started
+Private research & decision intelligence. Upload your company's documents, spreadsheets and meeting notes, then get **cited answers**, **comparison tables** and **decision briefs** — every claim links back to the exact passage it came from.
 
-First, run the development server:
+## Features
+
+- **Uploads** — PDF, DOCX, XLSX/XLS, CSV, Markdown, TXT. Files are split into section-aware passages (page, heading, or sheet rows) so citations point somewhere meaningful.
+- **Search** — BM25 keyword search across every passage with highlighted snippets.
+- **Three research modes**
+  - *Answer*: direct answer, key points, confidence, gaps, follow-ups
+  - *Compare*: model-chosen dimensions, every cell cited
+  - *Decision brief*: options with pros/cons, evidence, risks + mitigations, verdict, next steps
+- **Evidence ledger** — click any `[n]` citation to open the source passage; jump to it in the document.
+- **Saved research & notes**, **Markdown export**, **print-to-PDF**.
+- **Share links** — unguessable, read-only, revocable.
+- **Sample workspace** — first boot seeds a realistic market-research scenario (Halden's UK vs Germany expansion).
+
+## Running locally
 
 ```bash
+npm install
+cp .env.example .env.local   # add ANTHROPIC_API_KEY
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. Without an API key the app runs in **extractive mode**: retrieval, citations and the full UI work, but results are verbatim passages rather than synthesis.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To reset the workspace, stop the server and delete the `data/` folder.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## How it works
 
-## Learn More
+```
+upload → parse (unpdf / mammoth / SheetJS) → section-aware chunks → BM25 index
+question → retrieve top passages (per-doc cap for balance) → Claude, structured output
+        → citation hygiene (drop any [n] that isn't a real passage) → saved research record
+```
 
-To learn more about Next.js, take a look at the following resources:
+- `src/lib/ingest.ts` — parsing and chunking
+- `src/lib/search.ts` — BM25 + passage selection
+- `src/lib/engine.ts` — prompts, Zod schemas, Claude call, extractive fallback
+- `src/lib/store.ts` — JSON file store (`data/cairn.json`), single-writer queue; swap for Postgres later
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Claude is called with structured outputs (`betaZodOutputFormat`), adaptive thinking, and server-side refusal fallbacks. Only the retrieved passages (≤ 18) are sent — never the whole library.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Roadmap
 
-## Deploy on Vercel
+- **Next**: team workspaces, roles, comments on briefs, auth
+- **Later**: Google Drive / Notion / SharePoint / Slack connectors, embeddings for semantic retrieval, scheduled re-runs
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Anthropic SDK · Zod

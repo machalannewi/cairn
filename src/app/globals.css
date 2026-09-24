@@ -1,26 +1,141 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-ink: #070a08;
+  --color-base: #0a0e0b;
+  --color-panel: #0e1310;
+  --color-panel-2: #121814;
+  --color-raise: #161d18;
+  --color-line: #1d2620;
+  --color-line-strong: #2a352d;
+  --color-fg: #e9eee5;
+  --color-soft: #b5bdb2;
+  --color-muted: #858e84;
+  --color-dim: #566057;
+  --color-lime: #d7f25c;
+  --color-lime-deep: #b9d63e;
+  --color-lime-ink: #11160a;
+  --color-amber: #f2b53a;
+  --color-rose: #f07a6a;
+  --color-sky: #7cc4e8;
+
+  --font-sans: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, SFMono-Regular, monospace;
+
+  --animate-pulse-soft: pulse-soft 2.2s ease-in-out infinite;
+  --animate-rise: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-scan: scan 1.6s ease-in-out infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-base);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-lime);
+  color: var(--color-lime-ink);
+}
+
+/* The faint architectural grid from the template */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.028) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.028) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+.glow {
+  background: radial-gradient(60% 50% at 70% 20%, rgb(215 242 92 / 0.06), transparent 70%);
+}
+
+/* Mono micro-label — "LIVE PRODUCTION", "DIRECTOR ACTIVITY" */
+.label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.panel {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.018), transparent 40%), var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+/* Citation chip rendered inline in answers */
+.cite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 17px;
+  padding: 0 4px;
+  margin: 0 1px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: 2px;
+  color: var(--color-lime);
+  background: rgb(215 242 92 / 0.09);
+  border: 1px solid rgb(215 242 92 / 0.28);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cite:hover,
+.cite[data-active="true"] {
+  background: var(--color-lime);
+  color: var(--color-lime-ink);
+}
+
+.prose-cairn p { margin: 0 0 0.9em; line-height: 1.7; color: var(--color-soft); }
+.prose-cairn p:last-child { margin-bottom: 0; }
+.prose-cairn strong { color: var(--color-fg); font-weight: 600; }
+.prose-cairn ul { margin: 0 0 0.9em; padding-left: 1.1em; list-style: disc; color: var(--color-soft); }
+.prose-cairn li { margin: 0.25em 0; line-height: 1.65; }
+.prose-cairn li::marker { color: var(--color-lime); }
+
+mark {
+  background: rgb(215 242 92 / 0.18);
+  color: var(--color-fg);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+@media print {
+  body { background: #fff; color: #111; }
+  .no-print { display: none !important; }
+  .panel { border-color: #ddd; background: #fff; }
+}
+
+.passage:target {
+  background: rgb(215 242 92 / 0.05);
+  box-shadow: inset 2px 0 0 var(--color-lime);
 }
