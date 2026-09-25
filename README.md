@@ -22,13 +22,13 @@ Private research & decision intelligence. Upload your company's documents, sprea
 npm install
 npx clerk init --framework next   # writes Clerk dev keys to .env.local (no account needed to start)
 npx clerk enable orgs --force-selection --auto-create
-# add ANTHROPIC_API_KEY to .env.local (see .env.example)
+# add DATABASE_URL (Neon), BLOB_READ_WRITE_TOKEN and ANTHROPIC_API_KEY to .env.local (see .env.example)
 npm run dev
 ```
 
 Open http://localhost:3000. Without an API key the app runs in **extractive mode**: retrieval, citations and the full UI work, but results are verbatim passages rather than synthesis.
 
-To reset all workspaces, stop the server and delete the `data/` folder.
+Tables are created automatically on first request. To reset everything, drop the `workspaces`, `documents`, `chunks`, `research` and `usage` tables.
 
 ## Teams & permissions
 
@@ -42,7 +42,7 @@ Every workspace is a Clerk Organization. New users get one automatically (seeded
 | Remove documents, clear samples | | ✓ |
 | Invite, remove, change roles | | ✓ |
 
-The workspace id is always taken from the verified session (`src/lib/session.ts`), never from the request, and every store read/write is keyed by it. Data lives in `data/orgs/<orgId>.json` with uploads in `data/uploads/<orgId>/`; `data/shares.json` maps public share tokens to their workspace.
+The workspace id is always taken from the verified session (`src/lib/session.ts`), never from the request, and every store read/write is keyed by it. Every table row carries its `org_id`, and every query filters on it.
 
 ## How it works
 
@@ -55,11 +55,23 @@ question → retrieve top passages (per-doc cap for balance) → Claude, structu
 - `src/lib/ingest.ts` — parsing and chunking
 - `src/lib/search.ts` — BM25 + passage selection
 - `src/lib/engine.ts` — prompts, Zod schemas, Claude call, extractive fallback
-- `src/lib/store.ts` — per-workspace JSON store with a single-writer queue; swap for Postgres later
+- `src/lib/db.ts` — Neon Postgres client and schema (auto-migrates)
+- `src/lib/store.ts` — all queries, each scoped by `org_id`
 - `src/lib/session.ts` — Clerk session → workspace, role checks
 - `src/proxy.ts` — protects everything except `/`, auth pages and `/share/*`
 
 Claude is called with structured outputs (`betaZodOutputFormat`), adaptive thinking, and server-side refusal fallbacks. Only the retrieved passages (≤ 18) are sent — never the whole library.
+
+## Deploying to Vercel
+
+1. Import the repo in Vercel.
+2. **Storage → Neon** and **Storage → Blob (private)**, both connected to the project — this sets `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN`.
+3. Add `ANTHROPIC_API_KEY` and the Clerk variables (use a Clerk **production** instance for a public launch).
+4. Deploy. Tables are created on the first request.
+
+**Uploads:** files up to ~3.5 MB post straight to the API; larger ones (up to 20 MB) upload from the browser to a private Blob under `uploads/<orgId>/`, are parsed, then deleted. Only extracted text is stored.
+
+**Cost cap:** each workspace gets `CAIRN_DAILY_RUNS` (default 25) Claude runs per UTC day; failed runs are refunded. Usage shows in Settings.
 
 ## Roadmap
 
@@ -68,4 +80,4 @@ Claude is called with structured outputs (`betaZodOutputFormat`), adaptive think
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Clerk · Anthropic SDK · Zod
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Clerk · Neon Postgres · Vercel Blob · Anthropic SDK · Zod

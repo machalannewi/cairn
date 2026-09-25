@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { QuickAsk } from "@/components/app/quick-ask";
 import { clock, DocIcon, kindLabel, LinkButton, MODE_META, Panel, Tag, timeAgo } from "@/components/ui";
 import { requireWorkspace } from "@/lib/session";
+import { counts, listDocs, listResearch } from "@/lib/store";
 
 export const metadata = { title: "Overview" };
 
@@ -15,18 +16,16 @@ const SUGGESTED = [
 ];
 
 export default async function Overview() {
-  const db = (await requireWorkspace()).db;
-  const passages = db.chunks.length;
-  const words = db.docs.reduce((s, d) => s + d.wordCount, 0);
-  const shared = db.research.filter((r) => r.shareToken).length;
-  const saved = db.research.filter((r) => r.saved).length;
+  const { orgId, name } = await requireWorkspace();
+  const [c, docs, research] = await Promise.all([counts(orgId), listDocs(orgId), listResearch(orgId)]);
+  const { chunks: passages, words, shared, saved } = c;
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <>
       <PageHeader
-        eyebrow={`Overview / ${db.workspace.name}`}
+        eyebrow={`Overview / ${name}`}
         title={`${greet}.`}
         description="Ask a question, compare options, or draft a decision brief from your workspace."
         actions={
@@ -42,9 +41,9 @@ export default async function Overview() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          ["Documents", db.docs.length, `${words.toLocaleString()} words`],
+          ["Documents", c.docs, `${words.toLocaleString()} words`],
           ["Passages indexed", passages, "BM25 · section-aware"],
-          ["Research runs", db.research.length, `${saved} saved`],
+          ["Research runs", c.research, `${saved} saved`],
           ["Shared reports", shared, shared ? "Live links" : "None yet"],
         ].map(([k, v, sub]) => (
           <div key={k as string} className="panel px-5 py-4">
@@ -65,7 +64,7 @@ export default async function Overview() {
             </Link>
           }
         >
-          {db.research.length === 0 ? (
+          {research.length === 0 ? (
             <div className="p-5">
               <p className="text-[14px] text-muted">No research yet. Start with one of these:</p>
               <ul className="mt-4 space-y-2">
@@ -90,7 +89,7 @@ export default async function Overview() {
             </div>
           ) : (
             <ol className="relative px-5 py-4">
-              {db.research.slice(0, 7).map((r, i, arr) => (
+              {research.slice(0, 7).map((r, i, arr) => (
                 <li key={r.id} className="relative flex gap-4 pb-5 last:pb-1">
                   {i < arr.length - 1 && <span className="absolute left-[7px] top-5 bottom-0 w-px bg-line" />}
                   <span className="relative mt-1.5 h-[15px] w-[15px] shrink-0 rounded-full border border-dashed border-lime/60 bg-panel" />
@@ -123,7 +122,7 @@ export default async function Overview() {
           }
         >
           <ul className="divide-y divide-line">
-            {db.docs.slice(0, 7).map((d) => (
+            {docs.slice(0, 7).map((d) => (
               <li key={d.id}>
                 <Link href={`/app/library/${d.id}`} className="group flex items-center gap-3 px-5 py-3.5 hover:bg-panel-2/60">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-ink/60 text-soft group-hover:text-lime">
@@ -139,7 +138,7 @@ export default async function Overview() {
                 </Link>
               </li>
             ))}
-            {db.docs.length === 0 && <li className="p-5 text-sm text-muted">No documents yet.</li>}
+            {docs.length === 0 && <li className="p-5 text-sm text-muted">No documents yet.</li>}
           </ul>
         </Panel>
       </div>

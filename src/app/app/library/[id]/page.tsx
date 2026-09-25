@@ -4,19 +4,21 @@ import { ArrowLeft, MessageSquareQuote, Scale } from "lucide-react";
 import { DeleteDoc } from "@/components/app/delete-doc";
 import { DocIcon, formatBytes, kindLabel, Label, LinkButton, Panel, Tag, timeAgo } from "@/components/ui";
 import { requireWorkspace } from "@/lib/session";
+import { docChunks, getDoc, listResearch } from "@/lib/store";
 
 export async function generateMetadata({ params }: PageProps<"/app/library/[id]">) {
   const { id } = await params;
-  return { title: (await requireWorkspace()).db.docs.find((d) => d.id === id)?.name ?? "Document" };
+  const { orgId } = await requireWorkspace();
+  return { title: (await getDoc(orgId, id))?.name ?? "Document" };
 }
 
 export default async function DocPage({ params }: PageProps<"/app/library/[id]">) {
   const { id } = await params;
-  const { db, isAdmin } = await requireWorkspace();
-  const doc = db.docs.find((d) => d.id === id);
+  const { orgId, isAdmin } = await requireWorkspace();
+  const doc = await getDoc(orgId, id);
   if (!doc) notFound();
-  const chunks = db.chunks.filter((c) => c.docId === id).sort((a, b) => a.index - b.index);
-  const citedIn = db.research.filter((r) => r.sources.some((s) => s.docId === id));
+  const [chunks, research] = await Promise.all([docChunks(orgId, id), listResearch(orgId)]);
+  const citedIn = research.filter((r) => r.sources.some((s) => s.docId === id));
 
   return (
     <>

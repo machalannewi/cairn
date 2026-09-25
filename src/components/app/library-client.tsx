@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Search, UploadCloud, X } from "lucide-react";
 import { cx, DocIcon, formatBytes, kindLabel, Label, Tag, timeAgo } from "@/components/ui";
@@ -9,7 +10,7 @@ import type { DocKind, DocRecord } from "@/lib/types";
 
 const ACCEPT = ".pdf,.docx,.xlsx,.xls,.csv,.md,.markdown,.txt";
 
-type Upload = { name: string; state: "uploading" | "done" | "error"; message?: string; id?: string };
+type Upload = { key: string; name: string; state: "uploading" | "done" | "error"; message?: string; id?: string };
 type Hit = { chunkId: string; docId: string; docName: string; kind: DocKind; location: string; snippet: string; score: number };
 
 export function Uploader() {
@@ -18,31 +19,60 @@ export function Uploader() {
   const [drag, setDrag] = useState(false);
   const [uploads, setUploads] = useState<Upload[]>([]);
 
+  const { orgId } = useAuth();
+
+  // Vercel functions reject bodies over ~4.5 MB, so bigger files go browser → private Blob first.
+  const DIRECT_LIMIT = 3.5 * 1024 * 1024;
+
+  const sendOne = async (file: File): Promise<{ doc?: DocRecord; error?: string }> => {
+    let res: Response;
+    if (file.size <= DIRECT_LIMIT) {
+      const fd = new FormData();
+      fd.append("files", file);
+      res = await fetch("/api/documents", { method: "POST", body: fd });
+    } else {
+      if (!orgId) return { error: "Choose a workspace first" };
+      const { upload } = await import("@vercel/blob/client");
+      const blob = await upload(`uploads/${orgId}/${file.name}`, file, {
+        access: "private",
+        handleUploadUrl: "/api/uploads",
+        multipart: file.size > 8 * 1024 * 1024,
+      });
+      res = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ blobs: [{ pathname: blob.pathname, name: file.name }] }),
+      });
+    }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: json.error || "Upload failed" };
+    return json.results?.[0] ?? { error: "Upload failed" };
+  };
+
   const send = async (files: File[]) => {
     if (!files.length) return;
-    setUploads((u) => [...files.map((f) => ({ name: f.name, state: "uploading" as const })), ...u].slice(0, 8));
-    const fd = new FormData();
-    files.forEach((f) => fd.append("files", f));
-    try {
-      const res = await fetch("/api/documents", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error);
-      const results = json.results as { name: string; doc?: DocRecord; error?: string }[];
-      setUploads((u) =>
-        u.map((x) => {
-          const r = results.find((y) => y.name === x.name && x.state === "uploading");
-          if (!r) return x;
-          return r.error
-            ? { ...x, state: "error", message: r.error }
-            : { ...x, state: "done", id: r.doc!.id, message: `${r.doc!.chunkCount} passages indexed` };
-        }),
-      );
-      router.refresh();
-    } catch (e) {
-      setUploads((u) =>
-        u.map((x) => (x.state === "uploading" ? { ...x, state: "error", message: e instanceof Error ? e.message : "Upload failed" } : x)),
-      );
-    }
+    const batch = files.map((f) => ({ key: `${f.name}-${f.size}-${Math.random()}`, file: f }));
+    setUploads((u) => [...batch.map((b) => ({ key: b.key, name: b.file.name, state: "uploading" as const })), ...u].slice(0, 12));
+    await Promise.all(
+      batch.map(async ({ key, file }) => {
+        let r: { doc?: DocRecord; error?: string };
+        try {
+          r = file.size > 20 * 1024 * 1024 ? { error: "File is larger than 20 MB" } : await sendOne(file);
+        } catch (e) {
+          r = { error: e instanceof Error ? e.message : "Upload failed" };
+        }
+        setUploads((u) =>
+          u.map((x) =>
+            x.key !== key
+              ? x
+              : r.doc
+                ? { ...x, state: "done", id: r.doc.id, message: `${r.doc.chunkCount} passages indexed` }
+                : { ...x, state: "error", message: r.error },
+          ),
+        );
+      }),
+    );
+    router.refresh();
   };
 
   return (
@@ -92,7 +122,7 @@ export function Uploader() {
       {uploads.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {uploads.map((u, i) => (
-            <li key={i} className="flex items-center gap-3 rounded-xl border border-line bg-panel px-4 py-2.5 text-[13px] animate-rise">
+            <li key={u.key} className="flex items-center gap-3 rounded-xl border border-line bg-panel px-4 py-2.5 text-[13px] animate-rise">
               {u.state === "uploading" ? (
                 <Loader2 className="h-4 w-4 animate-spin text-lime" />
               ) : u.state === "done" ? (

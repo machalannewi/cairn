@@ -2,7 +2,7 @@ import "server-only";
 import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
-import { mutate, readDb } from "./store";
+import { ensureWorkspace } from "./store";
 import type { Actor } from "./types";
 
 export type Workspace = {
@@ -39,16 +39,17 @@ export async function requireWorkspace() {
   const ws = await resolve();
   if (!ws) redirect("/sign-in");
   const name = await orgName(ws.orgId);
-  const db = await readDb(ws.orgId, name);
-  // Keep the stored name in sync so public share pages can show it.
-  if (db.workspace.name !== name) await mutate(ws.orgId, (d) => void (d.workspace.name = name));
-  return { ...ws, db, name };
+  // Creates + seeds on first visit; keeps the stored name in sync for public share pages.
+  const workspace = await ensureWorkspace(ws.orgId, name);
+  return { ...ws, name, focus: workspace.focus };
 }
 
 /** For route handlers: the workspace, or a JSON 401 to return as-is. */
 export async function apiWorkspace(): Promise<Workspace | NextResponse> {
   const ws = await resolve();
-  return ws ?? NextResponse.json({ error: "Sign in and choose a workspace first" }, { status: 401 });
+  if (!ws) return NextResponse.json({ error: "Sign in and choose a workspace first" }, { status: 401 });
+  await ensureWorkspace(ws.orgId, await orgName(ws.orgId));
+  return ws;
 }
 
 export function forbidden(message = "Only workspace admins can do that") {

@@ -1,123 +1,249 @@
 import "server-only";
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import type { Database } from "./types";
+import { ready, sql } from "./db";
+import type { Actor, Chunk, DocRecord, ResearchRecord } from "./types";
 
 /**
- * JSON-file store, one file per workspace (Clerk organization). Good enough for
- * a single-server deployment and swappable for Postgres later — every read and
- * write goes through here, always keyed by an orgId taken from the session.
+ * Data access, always keyed by an orgId taken from the verified session.
+ * Every query filters on org_id so one workspace can never read another's rows.
  */
-const DATA_DIR = path.join(process.cwd(), "data");
-const ORG_DIR = path.join(DATA_DIR, "orgs");
-const SHARES_FILE = path.join(DATA_DIR, "shares.json");
 
-// Pages and route handlers can be bundled as separate module instances, so the
-// cache lives on globalThis to guarantee one copy of each workspace per process.
-type State = {
-  dbs: Map<string, Database>;
-  loading: Map<string, Promise<Database>>;
-  writes: Map<string, Promise<void>>;
-  shares: Promise<Map<string, string>> | null;
-};
-const g = globalThis as typeof globalThis & { __cairn2?: State };
-const state: State = (g.__cairn2 ??= { dbs: new Map(), loading: new Map(), writes: new Map(), shares: null });
+const iso = (v: unknown) => new Date(v as string).toISOString();
 
-/** Org ids come from Clerk ("org_…"); refuse anything that could escape the data dir. */
-function safeId(orgId: string) {
-  if (!/^[A-Za-z0-9_-]{3,64}$/.test(orgId)) throw new Error("Invalid workspace id");
-  return orgId;
+/* ───────────────────────── Workspaces ───────────────────────── */
+
+export type WorkspaceRow = { name: string; focus: string };
+
+/** Get (or create and seed) the workspace for an org, keeping its display name current. */
+export async function ensureWorkspace(orgId: string, name: string): Promise<WorkspaceRow> {
+  await ready();
+  const q = sql();
+  const [existing] = await q`select name, focus from workspaces where org_id = ${orgId}`;
+  if (existing) {
+    if (existing.name !== name) await q`update workspaces set name = ${name} where org_id = ${orgId}`;
+    return { name, focus: existing.focus as string };
+  }
+  const created = await q`
+    insert into workspaces (org_id, name) values (${orgId}, ${name})
+    on conflict (org_id) do nothing
+    returning org_id`;
+  // Only the request that created the row seeds, so concurrent first visits can't double-seed.
+  if (created.length) {
+    const { seedWorkspace } = await import("./seed");
+    await seedWorkspace(orgId);
+  }
+  return (await getWorkspace(orgId)) ?? { name, focus: "Market research" };
 }
 
-const dbFile = (orgId: string) => path.join(ORG_DIR, `${safeId(orgId)}.json`);
-export const uploadDir = (orgId: string) => path.join(DATA_DIR, "uploads", safeId(orgId));
+export async function getWorkspace(orgId: string): Promise<WorkspaceRow | null> {
+  await ready();
+  const [row] = await sql()`select name, focus from workspaces where org_id = ${orgId}`;
+  return (row as WorkspaceRow) ?? null;
+}
 
-function empty(name: string): Database {
+export async function setFocus(orgId: string, focus: string) {
+  await ready();
+  await sql()`update workspaces set focus = ${focus} where org_id = ${orgId}`;
+}
+
+export async function counts(orgId: string) {
+  await ready();
+  const [row] = await sql()`
+    select
+      (select count(*) from documents where org_id = ${orgId})::int as docs,
+      (select count(*) from chunks where org_id = ${orgId})::int as chunks,
+      (select count(*) from research where org_id = ${orgId})::int as research,
+      (select count(*) from research where org_id = ${orgId} and saved)::int as saved,
+      (select count(*) from research where org_id = ${orgId} and share_token is not null)::int as shared,
+      (select coalesce(sum(word_count), 0) from documents where org_id = ${orgId})::int as words`;
+  return row as { docs: number; chunks: number; research: number; saved: number; shared: number; words: number };
+}
+
+/* ───────────────────────── Documents & chunks ───────────────────────── */
+
+function toDoc(r: Record<string, unknown>): DocRecord {
   return {
-    version: 1,
-    workspace: { name, focus: "Market research", createdAt: new Date().toISOString() },
-    docs: [],
-    chunks: [],
-    research: [],
+    id: r.id as string,
+    name: r.name as string,
+    kind: r.kind as DocRecord["kind"],
+    size: r.size as number,
+    category: r.category as DocRecord["category"],
+    uploadedAt: iso(r.uploaded_at),
+    chunkCount: r.chunk_count as number,
+    wordCount: r.word_count as number,
+    excerpt: r.excerpt as string,
+    sheets: (r.sheets as DocRecord["sheets"]) ?? undefined,
+    sample: (r.sample as boolean) || undefined,
+    uploadedBy: (r.uploaded_by as Actor) ?? undefined,
   };
 }
 
-async function load(orgId: string, name = "Workspace"): Promise<Database> {
-  const cached = state.dbs.get(orgId);
-  if (cached) return cached;
-  let pending = state.loading.get(orgId);
-  if (!pending) {
-    pending = (async () => {
-      await fs.mkdir(uploadDir(orgId), { recursive: true });
-      let db: Database;
-      try {
-        db = JSON.parse(await fs.readFile(dbFile(orgId), "utf8")) as Database;
-      } catch {
-        // New workspace: seed sample documents so the first visit isn't empty.
-        db = empty(name);
-        const { seedWorkspace } = await import("./seed");
-        await seedWorkspace(db, orgId);
-        await persist(orgId, db);
-      }
-      state.dbs.set(orgId, db);
-      return db;
-    })().finally(() => state.loading.delete(orgId));
-    state.loading.set(orgId, pending);
-  }
-  return pending;
+const toChunk = (r: Record<string, unknown>): Chunk => ({
+  id: r.id as string,
+  docId: r.doc_id as string,
+  index: r.idx as number,
+  location: r.location as string,
+  text: r.text as string,
+});
+
+export async function listDocs(orgId: string): Promise<DocRecord[]> {
+  await ready();
+  const rows = await sql()`select * from documents where org_id = ${orgId} order by uploaded_at desc, name`;
+  return rows.map(toDoc);
 }
 
-let n = 0;
-async function writeAtomic(file: string, data: unknown) {
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${n++}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(data));
-  await fs.rename(tmp, file);
+export async function getDoc(orgId: string, id: string): Promise<DocRecord | null> {
+  await ready();
+  const [row] = await sql()`select * from documents where org_id = ${orgId} and id = ${id}`;
+  return row ? toDoc(row) : null;
 }
 
-const persist = (orgId: string, db: Database) => writeAtomic(dbFile(orgId), db);
-
-export async function readDb(orgId: string, name?: string): Promise<Database> {
-  return load(orgId, name);
+export async function docChunks(orgId: string, docId: string): Promise<Chunk[]> {
+  await ready();
+  const rows = await sql()`
+    select id, doc_id, idx, location, text from chunks
+    where org_id = ${orgId} and doc_id = ${docId} order by idx`;
+  return rows.map(toChunk);
 }
 
-/** Serialises writes per workspace so concurrent requests never clobber each other. */
-export async function mutate<T>(orgId: string, fn: (db: Database) => T | Promise<T>): Promise<T> {
-  const db = await load(orgId);
-  let result!: T;
-  const prev = state.writes.get(orgId) ?? Promise.resolve();
-  const run = prev.then(async () => {
-    result = await fn(db);
-    await persist(orgId, db);
-  });
-  state.writes.set(orgId, run.catch(() => {}));
-  await run;
-  return result;
+/** All passages in scope for search. Fine at team scale; move to Postgres FTS or pgvector when libraries grow. */
+export async function allChunks(orgId: string, docIds: string[] = []): Promise<Chunk[]> {
+  await ready();
+  const rows = docIds.length
+    ? await sql()`select id, doc_id, idx, location, text from chunks where org_id = ${orgId} and doc_id = any(${docIds})`
+    : await sql()`select id, doc_id, idx, location, text from chunks where org_id = ${orgId}`;
+  return rows.map(toChunk);
 }
 
-/* ───────── Share-link index: token → orgId, so public links resolve without a session ───────── */
-
-function shares() {
-  state.shares ??= fs
-    .readFile(SHARES_FILE, "utf8")
-    .then((s) => new Map(Object.entries(JSON.parse(s) as Record<string, string>)))
-    .catch(() => new Map<string, string>());
-  return state.shares;
+export async function insertDocument(orgId: string, doc: DocRecord, chunks: Chunk[]) {
+  await ready();
+  const q = sql();
+  await q.transaction([
+    q`insert into documents
+        (id, org_id, name, kind, size, category, uploaded_at, chunk_count, word_count, excerpt, sheets, sample, uploaded_by)
+      values
+        (${doc.id}, ${orgId}, ${doc.name}, ${doc.kind}, ${doc.size}, ${doc.category}, ${doc.uploadedAt},
+         ${doc.chunkCount}, ${doc.wordCount}, ${doc.excerpt}, ${doc.sheets ? JSON.stringify(doc.sheets) : null}::jsonb,
+         ${!!doc.sample}, ${doc.uploadedBy ? JSON.stringify(doc.uploadedBy) : null}::jsonb)`,
+    q`insert into chunks (id, doc_id, org_id, idx, location, text)
+      select id, ${doc.id}, ${orgId}, idx, location, text
+      from unnest(${chunks.map((c) => c.id)}::text[], ${chunks.map((c) => c.index)}::int[],
+                  ${chunks.map((c) => c.location)}::text[], ${chunks.map((c) => c.text)}::text[])
+        as t(id, idx, location, text)`,
+  ]);
 }
 
-let shareWrites: Promise<void> = Promise.resolve();
-export async function indexShare(token: string, orgId: string | null) {
-  const map = await shares();
-  if (orgId) map.set(token, orgId);
-  else map.delete(token);
-  shareWrites = shareWrites.then(() => writeAtomic(SHARES_FILE, Object.fromEntries(map))).catch(() => {});
-  await shareWrites;
+export async function deleteDocument(orgId: string, id: string): Promise<boolean> {
+  await ready();
+  const rows = await sql()`delete from documents where org_id = ${orgId} and id = ${id} returning id`;
+  return rows.length > 0;
 }
 
+export async function deleteSamples(orgId: string): Promise<number> {
+  await ready();
+  const rows = await sql()`delete from documents where org_id = ${orgId} and sample returning id`;
+  return rows.length;
+}
+
+/* ───────────────────────── Research ───────────────────────── */
+
+// Columns are the source of truth for fields that change after creation.
+function toResearch(r: Record<string, unknown>): ResearchRecord {
+  const rec = r.record as ResearchRecord;
+  return {
+    ...rec,
+    saved: r.saved as boolean,
+    shareToken: (r.share_token as string) ?? undefined,
+  };
+}
+
+export async function listResearch(orgId: string): Promise<ResearchRecord[]> {
+  await ready();
+  const rows = await sql()`select * from research where org_id = ${orgId} order by created_at desc`;
+  return rows.map(toResearch);
+}
+
+export async function getResearch(orgId: string, id: string): Promise<ResearchRecord | null> {
+  await ready();
+  const [row] = await sql()`select * from research where org_id = ${orgId} and id = ${id}`;
+  return row ? toResearch(row) : null;
+}
+
+export async function insertResearch(orgId: string, r: ResearchRecord) {
+  await ready();
+  await sql()`
+    insert into research (id, org_id, created_at, created_by, saved, record)
+    values (${r.id}, ${orgId}, ${r.createdAt}, ${r.createdBy?.id ?? null}, ${r.saved}, ${JSON.stringify(r)}::jsonb)`;
+}
+
+export async function updateResearch(
+  orgId: string,
+  id: string,
+  patch: { saved?: boolean; title?: string; notes?: string },
+): Promise<ResearchRecord | null> {
+  await ready();
+  const json: Record<string, string> = {};
+  if (patch.title !== undefined) json.title = patch.title;
+  if (patch.notes !== undefined) json.notes = patch.notes;
+  const [row] = await sql()`
+    update research set
+      saved = coalesce(${patch.saved ?? null}::boolean, saved),
+      record = record || ${JSON.stringify(json)}::jsonb
+    where org_id = ${orgId} and id = ${id}
+    returning *`;
+  return row ? toResearch(row) : null;
+}
+
+export async function deleteResearch(orgId: string, id: string) {
+  await ready();
+  await sql()`delete from research where org_id = ${orgId} and id = ${id}`;
+}
+
+/** Set a share token only if none exists; returns the effective token. Sharing also saves. */
+export async function shareResearch(orgId: string, id: string, token: string): Promise<string | null> {
+  await ready();
+  const [row] = await sql()`
+    update research set share_token = coalesce(share_token, ${token}), saved = true
+    where org_id = ${orgId} and id = ${id}
+    returning share_token`;
+  return (row?.share_token as string) ?? null;
+}
+
+export async function unshareResearch(orgId: string, id: string) {
+  await ready();
+  await sql()`update research set share_token = null where org_id = ${orgId} and id = ${id}`;
+}
+
+/** Public lookup for /share/[token] — the only query not scoped by a session org. */
 export async function findShared(token: string) {
-  const orgId = (await shares()).get(token);
-  if (!orgId) return null;
-  const db = await load(orgId);
-  const record = db.research.find((r) => r.shareToken === token);
-  return record ? { db, record } : null;
+  await ready();
+  const [row] = await sql()`
+    select r.*, w.name as workspace_name from research r
+    join workspaces w on w.org_id = r.org_id
+    where r.share_token = ${token}`;
+  return row ? { record: toResearch(row), workspace: row.workspace_name as string } : null;
+}
+
+/* ───────────────────────── Usage (daily AI run cap) ───────────────────────── */
+
+/** Atomically take one run from today's allowance. Returns false when the cap is reached. */
+export async function claimRun(orgId: string, limit: number): Promise<boolean> {
+  await ready();
+  const rows = await sql()`
+    insert into usage (org_id, day, runs) values (${orgId}, current_date, 1)
+    on conflict (org_id, day) do update set runs = usage.runs + 1
+    where usage.runs < ${limit}
+    returning runs`;
+  return rows.length > 0;
+}
+
+/** Give a run back when the model call fails, so errors don't eat the allowance. */
+export async function refundRun(orgId: string) {
+  await ready();
+  await sql()`update usage set runs = greatest(runs - 1, 0) where org_id = ${orgId} and day = current_date`;
+}
+
+export async function runsToday(orgId: string): Promise<number> {
+  await ready();
+  const [row] = await sql()`select runs from usage where org_id = ${orgId} and day = current_date`;
+  return (row?.runs as number) ?? 0;
 }

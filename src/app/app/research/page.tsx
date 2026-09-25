@@ -3,6 +3,7 @@ import { ArrowUpRight, BookmarkCheck, Link2, Plus } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { cx, LinkButton, MODE_META, Tag, timeAgo } from "@/components/ui";
 import { requireWorkspace } from "@/lib/session";
+import { listDocs, listResearch } from "@/lib/store";
 
 export const metadata = { title: "Research" };
 
@@ -15,14 +16,15 @@ const TABS = [
 export default async function ResearchList({ searchParams }: PageProps<"/app/research">) {
   const sp = await searchParams;
   const tab = (TABS.find((t) => t.id === sp.tab)?.id ?? "all") as (typeof TABS)[number]["id"];
-  const db = (await requireWorkspace()).db;
+  const { orgId } = await requireWorkspace();
+  const [research, docs] = await Promise.all([listResearch(orgId), listDocs(orgId)]);
   const counts = {
-    all: db.research.length,
-    saved: db.research.filter((r) => r.saved).length,
-    shared: db.research.filter((r) => r.shareToken).length,
+    all: research.length,
+    saved: research.filter((r) => r.saved).length,
+    shared: research.filter((r) => r.shareToken).length,
   };
-  const list = db.research.filter((r) => (tab === "saved" ? r.saved : tab === "shared" ? r.shareToken : true));
-  const docName = new Map(db.docs.map((d) => [d.id, d.name]));
+  const list = research.filter((r) => (tab === "saved" ? r.saved : tab === "shared" ? r.shareToken : true));
+  const docName = new Map(docs.map((d) => [d.id, d.name]));
 
   return (
     <>

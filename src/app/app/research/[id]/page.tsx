@@ -3,17 +3,18 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ResearchView } from "@/components/research/research-view";
 import { requireWorkspace } from "@/lib/session";
+import { getResearch } from "@/lib/store";
 
 export async function generateMetadata({ params }: PageProps<"/app/research/[id]">) {
   const { id } = await params;
-  const r = (await requireWorkspace()).db.research.find((x) => x.id === id);
+  const r = await getResearch((await requireWorkspace()).orgId, id);
   return { title: r?.title ?? "Research" };
 }
 
 export default async function ResearchPage({ params }: PageProps<"/app/research/[id]">) {
   const { id } = await params;
-  const { db, isAdmin, userId } = await requireWorkspace();
-  const record = db.research.find((x) => x.id === id);
+  const { orgId, isAdmin, userId } = await requireWorkspace();
+  const record = await getResearch(orgId, id);
   if (!record) notFound();
   const canManage = isAdmin || record.createdBy?.id === userId;
   return (

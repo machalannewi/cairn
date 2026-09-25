@@ -1,16 +1,18 @@
 import { PageHeader } from "@/components/app/page-header";
 import { ClearSamples, DocTable, LibrarySearch, Uploader } from "@/components/app/library-client";
 import { requireWorkspace } from "@/lib/session";
+import { counts, listDocs } from "@/lib/store";
 
 export const metadata = { title: "Library" };
 
 export default async function Library() {
-  const { db, isAdmin } = await requireWorkspace();
-  const samples = db.docs.filter((d) => d.sample).length;
+  const { orgId, isAdmin } = await requireWorkspace();
+  const [docs, c] = await Promise.all([listDocs(orgId), counts(orgId)]);
+  const samples = docs.filter((d) => d.sample).length;
   return (
     <>
       <PageHeader
-        eyebrow={`Library / ${db.docs.length} documents · ${db.chunks.length} passages`}
+        eyebrow={`Library / ${c.docs} documents · ${c.chunks} passages`}
         title="Library"
         description="Upload reports, spreadsheets and meeting notes. Cairn splits them into citable passages and indexes them for search."
       />
@@ -20,7 +22,7 @@ export default async function Library() {
         <LibrarySearch />
       </div>
       <div className="mt-6">
-        <DocTable docs={db.docs} />
+        <DocTable docs={docs} />
       </div>
     </>
   );

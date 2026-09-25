@@ -21,14 +21,14 @@ export async function generateMetadata({ params }: PageProps<"/share/[token]">) 
 export default async function SharedReport({ params }: PageProps<"/share/[token]">) {
   const hit = await find((await params).token);
   if (!hit) notFound();
-  const { db, record } = hit;
+  const { record, workspace } = hit;
   return (
     <div className="min-h-screen bg-grid">
       <header className="no-print sticky top-0 z-20 border-b border-line bg-base/80 backdrop-blur">
         <div className="mx-auto flex max-w-[1240px] items-center justify-between gap-4 px-5 py-3 sm:px-8">
           <Link href="/"><Logo size="sm" /></Link>
           <div className="hidden items-center gap-2 font-mono text-[10.5px] tracking-[0.16em] text-muted uppercase sm:flex">
-            <Lock className="h-3 w-3 text-lime" /> Shared by {db.workspace.name} · read-only
+            <Lock className="h-3 w-3 text-lime" /> Shared by {workspace} · read-only
           </div>
           <LinkButton href="/" variant="ghost" size="sm">
             What is Cairn <ArrowUpRight className="h-3.5 w-3.5" />

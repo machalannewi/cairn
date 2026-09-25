@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { runResearch } from "@/lib/engine";
+import { RunLimitError, runResearch } from "@/lib/engine";
 import { actor, apiWorkspace } from "@/lib/session";
-import { readDb } from "@/lib/store";
+import { listResearch } from "@/lib/store";
 import type { ResearchMode } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -10,7 +10,7 @@ export const maxDuration = 300;
 export async function GET() {
   const ws = await apiWorkspace();
   if (ws instanceof NextResponse) return ws;
-  return NextResponse.json({ research: (await readDb(ws.orgId)).research });
+  return NextResponse.json({ research: await listResearch(ws.orgId) });
 }
 
 export async function POST(req: Request) {
@@ -40,6 +40,7 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ record });
   } catch (e) {
+    if (e instanceof RunLimitError) return NextResponse.json({ error: e.message }, { status: 429 });
     if (e instanceof Anthropic.AuthenticationError)
       return NextResponse.json({ error: "Your Anthropic API key was rejected. Check ANTHROPIC_API_KEY." }, { status: 401 });
     if (e instanceof Anthropic.RateLimitError)

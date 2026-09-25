@@ -1,6 +1,6 @@
 import "server-only";
 import { ingestFile } from "./ingest";
-import type { Database } from "./types";
+import { insertDocument, setFocus } from "./store";
 
 /**
  * Sample workspace: Halden, a field-service scheduling SaaS, deciding where to
@@ -148,13 +148,10 @@ Germany,Gross margin,69%,70%,74%,EU hosting uplift not yet included
 `,
 };
 
-export async function seedWorkspace(db: Database, orgId: string) {
-  const results = await Promise.all(
-    Object.entries(FILES).map(([name, text]) => ingestFile(orgId, name, Buffer.from(text, "utf8"), { sample: true })),
-  );
-  db.workspace.focus = "Market research · sample: Halden EU expansion";
-  for (const { doc, chunks } of results) {
-    db.docs.push(doc);
-    db.chunks.push(...chunks);
+export async function seedWorkspace(orgId: string) {
+  for (const [name, text] of Object.entries(FILES)) {
+    const { doc, chunks } = await ingestFile(name, Buffer.from(text, "utf8"), { sample: true });
+    await insertDocument(orgId, doc, chunks);
   }
+  await setFocus(orgId, "Market research · sample: Halden EU expansion");
 }

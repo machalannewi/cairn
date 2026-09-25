@@ -3,6 +3,7 @@ import { Check, Minus, ShieldCheck, Users } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel, Tag } from "@/components/ui";
 import { requireWorkspace } from "@/lib/session";
+import { listDocs, listResearch } from "@/lib/store";
 
 export const metadata = { title: "Team" };
 
@@ -17,7 +18,8 @@ const ABILITIES: [string, boolean, boolean][] = [
 ];
 
 export default async function TeamPage() {
-  const { db, isAdmin, name } = await requireWorkspace();
+  const { orgId, isAdmin, name } = await requireWorkspace();
+  const [docs, research] = await Promise.all([listDocs(orgId), listResearch(orgId)]);
 
   // Contribution counts from the workspace's own records.
   const people = new Map<string, { name: string; docs: number; runs: number; shared: number }>();
@@ -27,8 +29,8 @@ export default async function TeamPage() {
     p[key]++;
     people.set(by.id, p);
   };
-  db.docs.forEach((d) => bump(d.uploadedBy, "docs"));
-  db.research.forEach((r) => {
+  docs.forEach((d) => bump(d.uploadedBy, "docs"));
+  research.forEach((r) => {
     bump(r.createdBy, "runs");
     if (r.shareToken) bump(r.createdBy, "shared");
   });

@@ -2,6 +2,7 @@ import { Composer } from "@/components/app/composer";
 import { PageHeader } from "@/components/app/page-header";
 import { aiEnabled } from "@/lib/engine";
 import { requireWorkspace } from "@/lib/session";
+import { listDocs } from "@/lib/store";
 import type { ResearchMode } from "@/lib/types";
 
 export const metadata = { title: "New research" };
@@ -11,7 +12,7 @@ export default async function NewResearch({ searchParams }: PageProps<"/app/new"
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
   const modeParam = one(sp.mode);
   const mode: ResearchMode = modeParam === "compare" || modeParam === "brief" ? modeParam : "ask";
-  const db = (await requireWorkspace()).db;
+  const docs = await listDocs((await requireWorkspace()).orgId);
 
   return (
     <>
@@ -24,7 +25,7 @@ export default async function NewResearch({ searchParams }: PageProps<"/app/new"
         // Remount when arriving from a different quick-ask so state resets.
         key={JSON.stringify(sp)}
         ai={aiEnabled()}
-        docs={db.docs.map(({ id, name, kind, category }) => ({ id, name, kind, category }))}
+        docs={docs.map(({ id, name, kind, category }) => ({ id, name, kind, category }))}
         initial={{
           mode,
           q: one(sp.q),

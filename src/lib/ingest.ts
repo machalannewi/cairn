@@ -1,9 +1,8 @@
 import "server-only";
-import { promises as fs } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import * as XLSX from "xlsx";
-import { mutate, uploadDir } from "./store";
+import { deleteDocument, deleteSamples, insertDocument } from "./store";
 import type { Actor, Chunk, DocCategory, DocKind, DocRecord } from "./types";
 
 export const ACCEPTED = [".pdf", ".docx", ".xlsx", ".xls", ".csv", ".md", ".markdown", ".txt"];
@@ -153,8 +152,8 @@ function categorise(name: string, kind: DocKind, text: string): DocCategory {
   return "Other";
 }
 
+/** Parse + chunk a file. Originals aren't kept — only extracted text is stored. */
 export async function ingestFile(
-  orgId: string,
   name: string,
   buf: Buffer,
   opts: { sample?: boolean; by?: Actor } = {},
@@ -166,7 +165,6 @@ export async function ingestFile(
   if (!chunks.length) throw new Error("No readable text found in this file");
   const all = parsed.sections.map((s) => s.text).join("\n\n");
 
-  await fs.writeFile(path.join(uploadDir(orgId), id + path.extname(name).toLowerCase()), buf);
 
   const doc: DocRecord = {
     id,
@@ -186,38 +184,12 @@ export async function ingestFile(
 }
 
 export async function addDocument(orgId: string, name: string, buf: Buffer, by: Actor) {
-  const { doc, chunks } = await ingestFile(orgId, name, buf, { by });
-  await mutate(orgId, (db) => {
-    db.docs.unshift(doc);
-    db.chunks.push(...chunks);
-  });
+  const { doc, chunks } = await ingestFile(name, buf, { by });
+  await insertDocument(orgId, doc, chunks);
   return doc;
 }
 
-export async function removeDocument(orgId: string, id: string) {
-  return mutate(orgId, async (db) => {
-    const doc = db.docs.find((d) => d.id === id);
-    if (!doc) return false;
-    db.docs = db.docs.filter((d) => d.id !== id);
-    db.chunks = db.chunks.filter((c) => c.docId !== id);
-    await fs.rm(path.join(uploadDir(orgId), id + path.extname(doc.name).toLowerCase()), { force: true });
-    return true;
-  });
-}
+export const removeDocument = deleteDocument;
 
 /** Admin action: drop the seeded sample documents once a team has its own. */
-export async function removeSamples(orgId: string) {
-  return mutate(orgId, async (db) => {
-    const ids = db.docs.filter((d) => d.sample).map((d) => d.id);
-    db.docs = db.docs.filter((d) => !d.sample);
-    db.chunks = db.chunks.filter((c) => !ids.includes(c.docId));
-    await Promise.all(
-      ids.map((id) =>
-        fs.readdir(uploadDir(orgId)).then((files) =>
-          Promise.all(files.filter((f) => f.startsWith(id + ".")).map((f) => fs.rm(path.join(uploadDir(orgId), f), { force: true }))),
-        ),
-      ),
-    );
-    return ids.length;
-  });
-}
+export const removeSamples = deleteSamples;

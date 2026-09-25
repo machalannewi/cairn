@@ -2,15 +2,17 @@ import Link from "next/link";
 import { ArrowUpRight, Cable, Cpu, Database, Lock, ShieldCheck, Users } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { buttonClass, Label, Panel, Tag } from "@/components/ui";
-import { aiEnabled, MODEL } from "@/lib/engine";
+import { aiEnabled, DAILY_RUN_LIMIT, MODEL } from "@/lib/engine";
 import { requireWorkspace } from "@/lib/session";
+import { counts, runsToday } from "@/lib/store";
 
 export const metadata = { title: "Settings" };
 
 const INTEGRATIONS = ["Google Drive", "Notion", "SharePoint", "Slack", "Confluence", "Dropbox"];
 
 export default async function Settings() {
-  const { db, name } = await requireWorkspace();
+  const { orgId, name, focus } = await requireWorkspace();
+  const [c, used] = await Promise.all([counts(orgId), runsToday(orgId)]);
   const ai = aiEnabled();
   return (
     <>
@@ -22,6 +24,7 @@ export default async function Settings() {
             <Row k="Model" v={ai ? MODEL : "—"} />
             <Row k="Mode" v={ai ? "Synthesis with verified citations" : "Verbatim passage extraction"} />
             <Row k="Fallback" v={ai ? "Server-side refusal fallback on" : "—"} />
+            <Row k="Today" v={ai ? `${used} of ${DAILY_RUN_LIMIT} AI runs used` : "Unlimited (no model calls)"} />
             {!ai && (
               <div className="rounded-xl border border-amber/30 bg-amber/[0.05] p-4 text-[13.5px] leading-relaxed text-soft">
                 Add your Anthropic API key to <code className="font-mono text-lime">.env.local</code> and restart the server:
@@ -34,10 +37,10 @@ export default async function Settings() {
         <Panel title="Data & privacy" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
           <div className="space-y-4 p-5 text-[14px]">
             <Row k="Workspace" v={name} />
-            <Row k="Focus" v={db.workspace.focus} />
-            <Row k="Storage" v="Local disk · isolated per workspace" />
+            <Row k="Focus" v={focus} />
+            <Row k="Storage" v="Postgres · isolated per workspace" />
             <Row k="Sent to model" v="Only retrieved passages (≤ 18 per run)" />
-            <Row k="Share links" v={`${db.research.filter((r) => r.shareToken).length} active · revocable`} />
+            <Row k="Share links" v={`${c.shared} active · revocable`} />
           </div>
         </Panel>
 
@@ -68,7 +71,7 @@ export default async function Settings() {
       <div className="mt-6 flex items-center gap-3 rounded-2xl border border-line bg-ink/40 px-5 py-4">
         <Database className="h-4 w-4 text-lime" />
         <Label className="!normal-case !tracking-normal !text-[13px] !font-sans text-muted">
-          {db.docs.length} documents · {db.chunks.length} passages · {db.research.length} research runs
+          {c.docs} documents · {c.chunks} passages · {c.research} research runs
         </Label>
       </div>
     </>

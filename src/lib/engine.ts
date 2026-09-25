@@ -4,7 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { searchChunks, selectSources, tokenize } from "./search";
-import { mutate, readDb } from "./store";
+import { allChunks, claimRun, insertResearch, listDocs, refundRun } from "./store";
 import type {
   Actor,
   AskResult,
@@ -17,6 +17,17 @@ import type {
 } from "./types";
 
 export const MODEL = process.env.CAIRN_MODEL || "claude-opus-5";
+
+/** Claude runs allowed per workspace per day — protects your API bill on a public deployment. */
+export const DAILY_RUN_LIMIT = Number(process.env.CAIRN_DAILY_RUNS) || 25;
+
+export class RunLimitError extends Error {
+  constructor() {
+    super(
+      `This workspace has used its ${DAILY_RUN_LIMIT} AI research runs for today. The limit resets at midnight UTC.`,
+    );
+  }
+}
 
 export function aiEnabled() {
   return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
@@ -64,16 +75,16 @@ const BriefSchema = z.object({
 /* ───────────────────────── Retrieval ───────────────────────── */
 
 async function retrieve(orgId: string, mode: ResearchMode, question: string, docIds: string[], subjects: string[]) {
-  const db = await readDb(orgId);
+  const [docs, chunks] = await Promise.all([listDocs(orgId), allChunks(orgId, docIds)]);
   const opts = { docIds, limit: 60 };
-  let hits = searchChunks(question, db.chunks, db.docs, opts);
+  let hits = searchChunks(question, chunks, docs, opts);
   if (mode === "compare" && subjects.length) {
     // Guarantee each subject gets its own evidence, then merge by best score.
-    const per = subjects.flatMap((s) => searchChunks(`${s} ${question}`, db.chunks, db.docs, opts).slice(0, 6));
+    const per = subjects.flatMap((s) => searchChunks(`${s} ${question}`, chunks, docs, opts).slice(0, 6));
     hits = [...per, ...hits];
   }
   if (mode === "brief") {
-    const extra = searchChunks(`${question} option risk cost payback constraint recommendation`, db.chunks, db.docs, opts);
+    const extra = searchChunks(`${question} option risk cost payback constraint recommendation`, chunks, docs, opts);
     hits = [...hits, ...extra];
   }
   const seen = new Set<string>();
@@ -285,7 +296,13 @@ export async function runResearch(input: {
   let model: string | undefined;
   let engine: ResearchRecord["engine"] = "extractive";
   if (aiEnabled()) {
-    ({ data, model } = await runClaude(input.mode, question, subjects, sources));
+    if (!(await claimRun(input.orgId, DAILY_RUN_LIMIT))) throw new RunLimitError();
+    try {
+      ({ data, model } = await runClaude(input.mode, question, subjects, sources));
+    } catch (e) {
+      await refundRun(input.orgId);
+      throw e;
+    }
     engine = "claude";
   } else {
     data = extractive(input.mode, question, subjects, sources);
@@ -308,8 +325,6 @@ export async function runResearch(input: {
     saved: false,
     createdBy: input.by,
   };
-  await mutate(input.orgId, (db) => {
-    db.research.unshift(record);
-  });
+  await insertResearch(input.orgId, record);
   return record;
 }
