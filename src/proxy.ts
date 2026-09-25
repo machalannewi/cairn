@@ -1,7 +1,16 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Everything is private except the marketing page, auth screens and share links.
-const isPublic = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)", "/share/(.*)"]);
+// Everything is private except the marketing page, auth screens, share links and
+// the generated icons / social images that browsers and link-preview bots fetch signed out.
+const isPublic = createRouteMatcher([
+  "/",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/share/(.*)",
+  "/icon(.*)",
+  "/apple-icon(.*)",
+  "/opengraph-image(.*)",
+]);
 // API handlers check the session themselves (apiWorkspace) so callers get a JSON 401, not a redirect.
 const isApi = createRouteMatcher(["/api/(.*)"]);
 

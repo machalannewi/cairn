@@ -16,10 +16,18 @@ const code = JetBrains_Mono({
   weight: ["400", "500", "600"],
 });
 
+// Absolute base for social-image URLs: production domain on Vercel, localhost in dev.
+const site = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : "http://localhost:3000";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(site),
   title: { default: "Cairn — Private research & decision intelligence", template: "%s · Cairn" },
   description:
     "Turn your company's documents, spreadsheets and meeting notes into cited answers, comparisons and decision briefs.",
+  openGraph: { siteName: "Cairn", type: "website" },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -15,7 +15,14 @@ async function find(token: string) {
 
 export async function generateMetadata({ params }: PageProps<"/share/[token]">) {
   const hit = await find((await params).token);
-  return { title: hit ? hit.record.title : "Report not found", robots: { index: false, follow: false } };
+  const kind = hit ? { ask: "A cited answer", compare: "A comparison", brief: "A decision brief" }[hit.record.mode] : "";
+  return {
+    title: hit ? hit.record.title : "Report not found",
+    description: hit
+      ? `${kind} from ${hit.workspace}, backed by ${hit.record.sources.length} cited sources.`
+      : undefined,
+    robots: { index: false, follow: false },
+  };
 }
 
 export default async function SharedReport({ params }: PageProps<"/share/[token]">) {
