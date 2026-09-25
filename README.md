@@ -13,19 +13,36 @@ Private research & decision intelligence. Upload your company's documents, sprea
 - **Evidence ledger** — click any `[n]` citation to open the source passage; jump to it in the document.
 - **Saved research & notes**, **Markdown export**, **print-to-PDF**.
 - **Share links** — unguessable, read-only, revocable.
+- **Login & team workspaces** — Clerk auth with Organizations. Each team gets a private library and research trail; admins invite members and manage roles.
 - **Sample workspace** — first boot seeds a realistic market-research scenario (Halden's UK vs Germany expansion).
 
 ## Running locally
 
 ```bash
 npm install
-cp .env.example .env.local   # add ANTHROPIC_API_KEY
+npx clerk init --framework next   # writes Clerk dev keys to .env.local (no account needed to start)
+npx clerk enable orgs --force-selection --auto-create
+# add ANTHROPIC_API_KEY to .env.local (see .env.example)
 npm run dev
 ```
 
 Open http://localhost:3000. Without an API key the app runs in **extractive mode**: retrieval, citations and the full UI work, but results are verbatim passages rather than synthesis.
 
-To reset the workspace, stop the server and delete the `data/` folder.
+To reset all workspaces, stop the server and delete the `data/` folder.
+
+## Teams & permissions
+
+Every workspace is a Clerk Organization. New users get one automatically (seeded with sample documents an admin can remove), and can create or switch workspaces from the sidebar.
+
+| | Member | Admin |
+|---|:-:|:-:|
+| Upload, search, run research, save, share | ✓ | ✓ |
+| Delete / unshare **own** research | ✓ | ✓ |
+| Delete / unshare **anyone's** research | | ✓ |
+| Remove documents, clear samples | | ✓ |
+| Invite, remove, change roles | | ✓ |
+
+The workspace id is always taken from the verified session (`src/lib/session.ts`), never from the request, and every store read/write is keyed by it. Data lives in `data/orgs/<orgId>.json` with uploads in `data/uploads/<orgId>/`; `data/shares.json` maps public share tokens to their workspace.
 
 ## How it works
 
@@ -38,15 +55,17 @@ question → retrieve top passages (per-doc cap for balance) → Claude, structu
 - `src/lib/ingest.ts` — parsing and chunking
 - `src/lib/search.ts` — BM25 + passage selection
 - `src/lib/engine.ts` — prompts, Zod schemas, Claude call, extractive fallback
-- `src/lib/store.ts` — JSON file store (`data/cairn.json`), single-writer queue; swap for Postgres later
+- `src/lib/store.ts` — per-workspace JSON store with a single-writer queue; swap for Postgres later
+- `src/lib/session.ts` — Clerk session → workspace, role checks
+- `src/proxy.ts` — protects everything except `/`, auth pages and `/share/*`
 
 Claude is called with structured outputs (`betaZodOutputFormat`), adaptive thinking, and server-side refusal fallbacks. Only the retrieved passages (≤ 18) are sent — never the whole library.
 
 ## Roadmap
 
-- **Next**: team workspaces, roles, comments on briefs, auth
+- **Next**: comments on briefs, activity feed, semantic search
 - **Later**: Google Drive / Notion / SharePoint / Slack connectors, embeddings for semantic retrieval, scheduled re-runs
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Anthropic SDK · Zod
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Clerk · Anthropic SDK · Zod

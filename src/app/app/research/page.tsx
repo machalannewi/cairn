@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight, BookmarkCheck, Link2, Plus } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { cx, LinkButton, MODE_META, Tag, timeAgo } from "@/components/ui";
-import { readDb } from "@/lib/store";
+import { requireWorkspace } from "@/lib/session";
 
 export const metadata = { title: "Research" };
 
@@ -15,7 +15,7 @@ const TABS = [
 export default async function ResearchList({ searchParams }: PageProps<"/app/research">) {
   const sp = await searchParams;
   const tab = (TABS.find((t) => t.id === sp.tab)?.id ?? "all") as (typeof TABS)[number]["id"];
-  const db = await readDb();
+  const db = (await requireWorkspace()).db;
   const counts = {
     all: db.research.length,
     saved: db.research.filter((r) => r.saved).length,
@@ -98,6 +98,7 @@ export default async function ResearchList({ searchParams }: PageProps<"/app/res
                 </p>
                 <div className="mt-auto flex items-center gap-3 pt-5 font-mono text-[10.5px] text-dim">
                   <span>{timeAgo(r.createdAt)}</span>
+                  {r.createdBy && <span>· {r.createdBy.name.split(" ")[0]}</span>}
                   <span>·</span>
                   <span className="truncate">
                     {docs.length} docs — {docs.slice(0, 2).map((d) => docName.get(d) ?? "deleted").join(", ")}

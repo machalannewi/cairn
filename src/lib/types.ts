@@ -1,3 +1,9 @@
+/** Who did something, captured at the time so it survives membership changes. */
+export interface Actor {
+  id: string;
+  name: string;
+}
+
 export type DocKind = "pdf" | "docx" | "sheet" | "csv" | "markdown" | "text";
 
 export interface DocRecord {
@@ -15,6 +21,7 @@ export interface DocRecord {
   /** Set for spreadsheets: sheet names and a small table preview */
   sheets?: { name: string; columns: string[]; rows: string[][]; rowCount: number }[];
   sample?: boolean;
+  uploadedBy?: Actor;
 }
 
 export type DocCategory = "Report" | "Spreadsheet" | "Meeting notes" | "Memo" | "Other";
@@ -91,6 +98,7 @@ export interface ResearchRecord {
   saved: boolean;
   shareToken?: string;
   notes?: string;
+  createdBy?: Actor;
 }
 
 export interface Database {

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { searchChunks, selectSources, tokenize } from "./search";
 import { mutate, readDb } from "./store";
 import type {
+  Actor,
   AskResult,
   BriefResult,
   CompareResult,
@@ -62,8 +63,8 @@ const BriefSchema = z.object({
 
 /* ───────────────────────── Retrieval ───────────────────────── */
 
-async function retrieve(mode: ResearchMode, question: string, docIds: string[], subjects: string[]) {
-  const db = await readDb();
+async function retrieve(orgId: string, mode: ResearchMode, question: string, docIds: string[], subjects: string[]) {
+  const db = await readDb(orgId);
   const opts = { docIds, limit: 60 };
   let hits = searchChunks(question, db.chunks, db.docs, opts);
   if (mode === "compare" && subjects.length) {
@@ -266,6 +267,8 @@ function titleFor(mode: ResearchMode, question: string, subjects: string[]) {
 /* ───────────────────────── Entry point ───────────────────────── */
 
 export async function runResearch(input: {
+  orgId: string;
+  by: Actor;
   mode: ResearchMode;
   question: string;
   docIds?: string[];
@@ -275,7 +278,7 @@ export async function runResearch(input: {
   const question = input.question.trim();
   const subjects = (input.subjects ?? []).map((s) => s.trim()).filter(Boolean);
   const docIds = input.docIds ?? [];
-  const sources = await retrieve(input.mode, question, docIds, subjects);
+  const sources = await retrieve(input.orgId, input.mode, question, docIds, subjects);
   if (!sources.length) throw new Error("No matching passages found. Try different wording or upload more documents.");
 
   let data: unknown;
@@ -303,8 +306,9 @@ export async function runResearch(input: {
     model,
     durationMs: Date.now() - started,
     saved: false,
+    createdBy: input.by,
   };
-  await mutate((db) => {
+  await mutate(input.orgId, (db) => {
     db.research.unshift(record);
   });
   return record;

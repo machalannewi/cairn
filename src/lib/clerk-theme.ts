@@ -1,0 +1,30 @@
+/** Clerk appearance matched to Cairn's tokens (see globals.css). */
+export const clerkAppearance = {
+  variables: {
+    colorPrimary: "#d7f25c",
+    colorPrimaryForeground: "#11160a",
+    colorBackground: "#0e1310",
+    colorForeground: "#e9eee5",
+    colorMuted: "#121814",
+    colorMutedForeground: "#858e84",
+    colorNeutral: "#e9eee5",
+    colorInput: "#070a08",
+    colorInputForeground: "#e9eee5",
+    colorBorder: "#2a352d",
+    colorRing: "#d7f25c",
+    colorDanger: "#f07a6a",
+    colorSuccess: "#d7f25c",
+    colorWarning: "#f2b53a",
+    colorShadow: "#000000",
+    colorModalBackdrop: "rgba(0, 0, 0, 0.7)",
+    fontFamily: "var(--font-display), ui-sans-serif, system-ui, sans-serif",
+    fontFamilyMono: "var(--font-code), ui-monospace, monospace",
+    borderRadius: "12px",
+  },
+  elements: {
+    card: { border: "1px solid #1d2620", boxShadow: "0 40px 120px -40px rgba(0,0,0,0.9)" },
+    formButtonPrimary: { borderRadius: "999px", fontWeight: 600 },
+    socialButtonsBlockButton: { borderRadius: "999px" },
+    organizationSwitcherTrigger: { width: "100%", justifyContent: "space-between", padding: "10px 12px" },
+  },
+} as const;

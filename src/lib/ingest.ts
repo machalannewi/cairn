@@ -3,8 +3,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import * as XLSX from "xlsx";
-import { mutate, UPLOAD_DIR } from "./store";
-import type { Chunk, DocCategory, DocKind, DocRecord } from "./types";
+import { mutate, uploadDir } from "./store";
+import type { Actor, Chunk, DocCategory, DocKind, DocRecord } from "./types";
 
 export const ACCEPTED = [".pdf", ".docx", ".xlsx", ".xls", ".csv", ".md", ".markdown", ".txt"];
 export const MAX_BYTES = 20 * 1024 * 1024;
@@ -153,7 +153,12 @@ function categorise(name: string, kind: DocKind, text: string): DocCategory {
   return "Other";
 }
 
-export async function ingestFile(name: string, buf: Buffer, opts: { sample?: boolean } = {}) {
+export async function ingestFile(
+  orgId: string,
+  name: string,
+  buf: Buffer,
+  opts: { sample?: boolean; by?: Actor } = {},
+) {
   if (buf.byteLength > MAX_BYTES) throw new Error("File is larger than 20 MB");
   const parsed = await parse(name, buf);
   const id = nanoid(10);
@@ -161,7 +166,7 @@ export async function ingestFile(name: string, buf: Buffer, opts: { sample?: boo
   if (!chunks.length) throw new Error("No readable text found in this file");
   const all = parsed.sections.map((s) => s.text).join("\n\n");
 
-  await fs.writeFile(path.join(UPLOAD_DIR, id + path.extname(name).toLowerCase()), buf);
+  await fs.writeFile(path.join(uploadDir(orgId), id + path.extname(name).toLowerCase()), buf);
 
   const doc: DocRecord = {
     id,
@@ -175,26 +180,44 @@ export async function ingestFile(name: string, buf: Buffer, opts: { sample?: boo
     excerpt: all.replace(/\s+/g, " ").slice(0, 400),
     sheets: parsed.sheets,
     sample: opts.sample,
+    uploadedBy: opts.by,
   };
   return { doc, chunks };
 }
 
-export async function addDocument(name: string, buf: Buffer) {
-  const { doc, chunks } = await ingestFile(name, buf);
-  await mutate((db) => {
+export async function addDocument(orgId: string, name: string, buf: Buffer, by: Actor) {
+  const { doc, chunks } = await ingestFile(orgId, name, buf, { by });
+  await mutate(orgId, (db) => {
     db.docs.unshift(doc);
     db.chunks.push(...chunks);
   });
   return doc;
 }
 
-export async function removeDocument(id: string) {
-  return mutate(async (db) => {
+export async function removeDocument(orgId: string, id: string) {
+  return mutate(orgId, async (db) => {
     const doc = db.docs.find((d) => d.id === id);
     if (!doc) return false;
     db.docs = db.docs.filter((d) => d.id !== id);
     db.chunks = db.chunks.filter((c) => c.docId !== id);
-    await fs.rm(path.join(UPLOAD_DIR, id + path.extname(doc.name).toLowerCase()), { force: true });
+    await fs.rm(path.join(uploadDir(orgId), id + path.extname(doc.name).toLowerCase()), { force: true });
     return true;
+  });
+}
+
+/** Admin action: drop the seeded sample documents once a team has its own. */
+export async function removeSamples(orgId: string) {
+  return mutate(orgId, async (db) => {
+    const ids = db.docs.filter((d) => d.sample).map((d) => d.id);
+    db.docs = db.docs.filter((d) => !d.sample);
+    db.chunks = db.chunks.filter((c) => !ids.includes(c.docId));
+    await Promise.all(
+      ids.map((id) =>
+        fs.readdir(uploadDir(orgId)).then((files) =>
+          Promise.all(files.filter((f) => f.startsWith(id + ".")).map((f) => fs.rm(path.join(uploadDir(orgId), f), { force: true }))),
+        ),
+      ),
+    );
+    return ids.length;
   });
 }

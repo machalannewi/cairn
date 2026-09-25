@@ -1,7 +1,7 @@
 import { Composer } from "@/components/app/composer";
 import { PageHeader } from "@/components/app/page-header";
 import { aiEnabled } from "@/lib/engine";
-import { readDb } from "@/lib/store";
+import { requireWorkspace } from "@/lib/session";
 import type { ResearchMode } from "@/lib/types";
 
 export const metadata = { title: "New research" };
@@ -11,7 +11,7 @@ export default async function NewResearch({ searchParams }: PageProps<"/app/new"
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
   const modeParam = one(sp.mode);
   const mode: ResearchMode = modeParam === "compare" || modeParam === "brief" ? modeParam : "ask";
-  const db = await readDb();
+  const db = (await requireWorkspace()).db;
 
   return (
     <>

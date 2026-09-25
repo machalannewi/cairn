@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { runResearch } from "@/lib/engine";
+import { actor, apiWorkspace } from "@/lib/session";
 import { readDb } from "@/lib/store";
 import type { ResearchMode } from "@/lib/types";
 
 export const maxDuration = 300;
 
 export async function GET() {
-  const db = await readDb();
-  return NextResponse.json({ research: db.research });
+  const ws = await apiWorkspace();
+  if (ws instanceof NextResponse) return ws;
+  return NextResponse.json({ research: (await readDb(ws.orgId)).research });
 }
 
 export async function POST(req: Request) {
+  const ws = await apiWorkspace();
+  if (ws instanceof NextResponse) return ws;
   const body = (await req.json().catch(() => ({}))) as {
     mode?: ResearchMode;
     question?: string;
@@ -26,7 +30,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Add at least two things to compare" }, { status: 400 });
 
   try {
-    const record = await runResearch({ mode, question: body.question, docIds: body.docIds, subjects: body.subjects });
+    const record = await runResearch({
+      orgId: ws.orgId,
+      by: await actor(ws.userId),
+      mode,
+      question: body.question,
+      docIds: body.docIds,
+      subjects: body.subjects,
+    });
     return NextResponse.json({ record });
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError)

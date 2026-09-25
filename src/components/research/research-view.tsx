@@ -23,7 +23,16 @@ import { CiteContext } from "./cited";
 import { ResultBody } from "./result-body";
 import { toMarkdown } from "./to-markdown";
 
-export function ResearchView({ record, readonly }: { record: ResearchRecord; readonly?: boolean }) {
+export function ResearchView({
+  record,
+  readonly,
+  canManage,
+}: {
+  record: ResearchRecord;
+  readonly?: boolean;
+  /** Author or admin: may delete and revoke sharing. */
+  canManage?: boolean;
+}) {
   const [active, setActive] = useState<number | null>(null);
   const refs = useRef(new Map<number, HTMLLIElement>());
 
@@ -48,13 +57,14 @@ export function ResearchView({ record, readonly }: { record: ResearchRecord; rea
             {record.question.replace(/[?.]$/, "") !== record.title && <p className="mt-3 text-[15px] text-muted">“{record.question}”</p>}
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[10.5px] tracking-wide text-dim">
               <span>{date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {clock(record.createdAt)}</span>
+              {record.createdBy && <span>By {record.createdBy.name}</span>}
               <span>{record.sources.length} sources</span>
               <span>{new Set(record.sources.map((s) => s.docId)).size} documents</span>
               <span>{record.engine === "claude" ? record.model ?? "Claude" : "Extractive"}</span>
               <span>{(record.durationMs / 1000).toFixed(1)}s</span>
             </div>
           </div>
-          {!readonly && <Actions record={record} />}
+          {!readonly && <Actions record={record} canManage={!!canManage} />}
         </div>
       </div>
 
@@ -128,7 +138,7 @@ export function ResearchView({ record, readonly }: { record: ResearchRecord; rea
   );
 }
 
-function Actions({ record }: { record: ResearchRecord }) {
+function Actions({ record, canManage }: { record: ResearchRecord; canManage: boolean }) {
   const router = useRouter();
   const [saved, setSaved] = useState(record.saved);
   const [token, setToken] = useState(record.shareToken);
@@ -201,9 +211,11 @@ function Actions({ record }: { record: ResearchRecord }) {
       <Button variant="ghost" onClick={() => window.print()} title="Print or save as PDF">
         <Printer className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" onClick={remove} title="Delete" className="hover:!border-rose/50 hover:!text-rose">
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {canManage && (
+        <Button variant="ghost" onClick={remove} title="Delete" className="hover:!border-rose/50 hover:!text-rose">
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      )}
       <Button onClick={share}>
         <Share2 className="h-4 w-4" /> Share
       </Button>
@@ -235,9 +247,11 @@ function Actions({ record }: { record: ResearchRecord }) {
               <a href={url} target="_blank" rel="noreferrer" className="font-mono text-[10.5px] tracking-[0.14em] text-lime uppercase hover:underline">
                 Preview →
               </a>
-              <button onClick={revoke} className="flex items-center gap-1.5 text-[12.5px] text-muted hover:text-rose">
-                <Link2Off className="h-3.5 w-3.5" /> Revoke link
-              </button>
+              {canManage && (
+                <button onClick={revoke} className="flex items-center gap-1.5 text-[12.5px] text-muted hover:text-rose">
+                  <Link2Off className="h-3.5 w-3.5" /> Revoke link
+                </button>
+              )}
             </div>
           </div>
         </>

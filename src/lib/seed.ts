@@ -148,11 +148,11 @@ Germany,Gross margin,69%,70%,74%,EU hosting uplift not yet included
 `,
 };
 
-export async function seedWorkspace(db: Database) {
+export async function seedWorkspace(db: Database, orgId: string) {
   const results = await Promise.all(
-    Object.entries(FILES).map(([name, text]) => ingestFile(name, Buffer.from(text, "utf8"), { sample: true })),
+    Object.entries(FILES).map(([name, text]) => ingestFile(orgId, name, Buffer.from(text, "utf8"), { sample: true })),
   );
-  db.workspace = { name: "Halden", focus: "Market research · EU expansion", createdAt: db.workspace.createdAt };
+  db.workspace.focus = "Market research · sample: Halden EU expansion";
   for (const { doc, chunks } of results) {
     db.docs.push(doc);
     db.chunks.push(...chunks);

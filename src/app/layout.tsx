@@ -1,5 +1,7 @@
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { JetBrains_Mono, Manrope } from "next/font/google";
+import { clerkAppearance } from "@/lib/clerk-theme";
 import "./globals.css";
 
 const display = Manrope({
@@ -23,7 +25,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${display.variable} ${code.variable} h-full antialiased`}>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <ClerkProvider appearance={clerkAppearance} afterSignOutUrl="/">
+          {children}
+        </ClerkProvider>
+      </body>
     </html>
   );
 }

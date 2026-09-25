@@ -3,16 +3,16 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, MessageSquareQuote, Scale } from "lucide-react";
 import { DeleteDoc } from "@/components/app/delete-doc";
 import { DocIcon, formatBytes, kindLabel, Label, LinkButton, Panel, Tag, timeAgo } from "@/components/ui";
-import { readDb } from "@/lib/store";
+import { requireWorkspace } from "@/lib/session";
 
 export async function generateMetadata({ params }: PageProps<"/app/library/[id]">) {
   const { id } = await params;
-  return { title: (await readDb()).docs.find((d) => d.id === id)?.name ?? "Document" };
+  return { title: (await requireWorkspace()).db.docs.find((d) => d.id === id)?.name ?? "Document" };
 }
 
 export default async function DocPage({ params }: PageProps<"/app/library/[id]">) {
   const { id } = await params;
-  const db = await readDb();
+  const { db, isAdmin } = await requireWorkspace();
   const doc = db.docs.find((d) => d.id === id);
   if (!doc) notFound();
   const chunks = db.chunks.filter((c) => c.docId === id).sort((a, b) => a.index - b.index);
@@ -40,12 +40,15 @@ export default async function DocPage({ params }: PageProps<"/app/library/[id]">
               <span>{formatBytes(doc.size)}</span>
               <span>{doc.wordCount.toLocaleString()} words</span>
               <span>{doc.chunkCount} passages</span>
-              <span>Added {timeAgo(doc.uploadedAt)}</span>
+              <span>
+                Added {timeAgo(doc.uploadedAt)}
+                {doc.uploadedBy ? ` by ${doc.uploadedBy.name}` : ""}
+              </span>
             </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <DeleteDoc id={doc.id} />
+          {isAdmin && <DeleteDoc id={doc.id} />}
           <LinkButton href={`/app/new?mode=brief&doc=${doc.id}`} variant="ghost">
             <Scale className="h-4 w-4" /> Brief
           </LinkButton>

@@ -1,19 +1,20 @@
-import { Cable, Cpu, Database, Lock, ShieldCheck, Users } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Cable, Cpu, Database, Lock, ShieldCheck, Users } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
-import { Label, Panel, Tag } from "@/components/ui";
+import { buttonClass, Label, Panel, Tag } from "@/components/ui";
 import { aiEnabled, MODEL } from "@/lib/engine";
-import { readDb } from "@/lib/store";
+import { requireWorkspace } from "@/lib/session";
 
 export const metadata = { title: "Settings" };
 
 const INTEGRATIONS = ["Google Drive", "Notion", "SharePoint", "Slack", "Confluence", "Dropbox"];
 
 export default async function Settings() {
-  const db = await readDb();
+  const { db, name } = await requireWorkspace();
   const ai = aiEnabled();
   return (
     <>
-      <PageHeader eyebrow="Settings / Workspace" title="Settings" description="Engine, data handling, and what's coming next." />
+      <PageHeader eyebrow="Settings / Workspace" title="Settings" description="Engine, data handling, team access and integrations." />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel title="Research engine" icon={<Cpu className="h-3.5 w-3.5" />} right={<Tag tone={ai ? "lime" : "amber"}>{ai ? "Live" : "Extractive"}</Tag>}>
@@ -32,32 +33,23 @@ export default async function Settings() {
 
         <Panel title="Data & privacy" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
           <div className="space-y-4 p-5 text-[14px]">
-            <Row k="Workspace" v={db.workspace.name} />
+            <Row k="Workspace" v={name} />
             <Row k="Focus" v={db.workspace.focus} />
-            <Row k="Storage" v="Local disk · data/cairn.json" />
+            <Row k="Storage" v="Local disk · isolated per workspace" />
             <Row k="Sent to model" v="Only retrieved passages (≤ 18 per run)" />
             <Row k="Share links" v={`${db.research.filter((r) => r.shareToken).length} active · revocable`} />
           </div>
         </Panel>
 
-        <Panel title="Team access" icon={<Users className="h-3.5 w-3.5" />} right={<Tag tone="amber">Next</Tag>}>
+        <Panel title="Team access" icon={<Users className="h-3.5 w-3.5" />} right={<Tag tone="lime">Live</Tag>}>
           <div className="p-5">
             <p className="text-[14px] leading-relaxed text-muted">
-              Invite teammates with Owner, Editor and Viewer roles, comment on briefs, and see who shared what.
+              Workspaces are private to their members. Admins invite teammates and set roles; members upload, research and
+              share.
             </p>
-            <div className="mt-5 space-y-2 opacity-50">
-              {[
-                ["You", "Owner"],
-                ["Invite by email…", "Editor"],
-              ].map(([n, r]) => (
-                <div key={n} className="flex items-center justify-between rounded-xl border border-line bg-ink/40 px-4 py-2.5 text-[13.5px]">
-                  <span>{n}</span>
-                  <span className="flex items-center gap-2 font-mono text-[10.5px] text-dim">
-                    {r} <Lock className="h-3 w-3" />
-                  </span>
-                </div>
-              ))}
-            </div>
+            <Link href="/app/team" className={buttonClass("ghost", "sm") + " mt-5"}>
+              Manage team <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </Panel>
 

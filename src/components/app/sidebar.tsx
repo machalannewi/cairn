@@ -2,37 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { useState } from "react";
-import {
-  BookMarked,
-  Cable,
-  FolderOpen,
-  LayoutGrid,
-  Lock,
-  Menu,
-  Plus,
-  Settings2,
-  Users,
-  X,
-} from "lucide-react";
+import { BookMarked, Cable, FolderOpen, LayoutGrid, Lock, Menu, Plus, Settings2, Users, X } from "lucide-react";
 import { cx, LinkButton, Logo } from "@/components/ui";
 
 const NAV = [
   { href: "/app", label: "Overview", icon: LayoutGrid, exact: true },
   { href: "/app/library", label: "Library", icon: FolderOpen },
   { href: "/app/research", label: "Research", icon: BookMarked },
+  { href: "/app/team", label: "Team", icon: Users },
   { href: "/app/settings", label: "Settings", icon: Settings2 },
 ];
 
 export function Sidebar({
-  workspace,
-  focus,
   ai,
+  isAdmin,
   counts,
 }: {
-  workspace: string;
-  focus: string;
   ai: boolean;
+  isAdmin: boolean;
   counts: { docs: number; research: number };
 }) {
   const path = usePathname();
@@ -49,15 +38,17 @@ export function Sidebar({
         </button>
       </div>
 
-      <div className="mx-4 mt-7 rounded-2xl border border-line bg-ink/50 p-3.5">
-        <div className="flex items-center gap-3">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-raise font-mono text-xs font-semibold text-lime">
-            {workspace.slice(0, 1)}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{workspace}</div>
-            <div className="truncate text-[11.5px] text-muted">{focus}</div>
-          </div>
+      <div className="mx-4 mt-7 rounded-2xl border border-line bg-ink/50 p-1">
+        <OrganizationSwitcher
+          hidePersonal
+          afterSelectOrganizationUrl="/app"
+          afterCreateOrganizationUrl="/app"
+          afterLeaveOrganizationUrl="/app"
+          organizationProfileUrl="/app/team"
+          organizationProfileMode="navigation"
+        />
+        <div className="px-3 pb-2 font-mono text-[9.5px] uppercase tracking-[0.18em] text-dim">
+          {isAdmin ? "Admin" : "Member"}
         </div>
       </div>
 
@@ -92,10 +83,7 @@ export function Sidebar({
 
       <nav className="mt-6 space-y-0.5 px-3">
         <div className="label px-2 pb-2">Coming soon</div>
-        {[
-          { label: "Team access", icon: Users, when: "Next" },
-          { label: "Integrations", icon: Cable, when: "Later" },
-        ].map((n) => (
+        {[{ label: "Integrations", icon: Cable }].map((n) => (
           <div key={n.label} className="flex h-10 cursor-default items-center gap-3 rounded-xl px-3 text-[14px] text-dim">
             <n.icon className="h-4 w-4" strokeWidth={1.7} />
             <span className="flex-1">{n.label}</span>
@@ -104,7 +92,10 @@ export function Sidebar({
         ))}
       </nav>
 
-      <div className="mt-auto p-4">
+      <div className="mt-auto space-y-3 p-4">
+        <div className="flex items-center gap-3 px-1">
+          <UserButton showName />
+        </div>
         <Link
           href="/app/settings"
           className="block rounded-2xl border border-line bg-ink/50 p-3.5 transition-colors hover:border-line-strong"

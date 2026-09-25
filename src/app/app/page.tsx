@@ -3,7 +3,7 @@ import { Activity, ArrowUpRight, FolderOpen, Lightbulb, Upload } from "lucide-re
 import { PageHeader } from "@/components/app/page-header";
 import { QuickAsk } from "@/components/app/quick-ask";
 import { clock, DocIcon, kindLabel, LinkButton, MODE_META, Panel, Tag, timeAgo } from "@/components/ui";
-import { readDb } from "@/lib/store";
+import { requireWorkspace } from "@/lib/session";
 
 export const metadata = { title: "Overview" };
 
@@ -15,7 +15,7 @@ const SUGGESTED = [
 ];
 
 export default async function Overview() {
-  const db = await readDb();
+  const db = (await requireWorkspace()).db;
   const passages = db.chunks.length;
   const words = db.docs.reduce((s, d) => s + d.wordCount, 0);
   const shared = db.research.filter((r) => r.shareToken).length;

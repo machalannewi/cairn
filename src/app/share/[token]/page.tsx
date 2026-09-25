@@ -3,25 +3,25 @@ import { notFound } from "next/navigation";
 import { ArrowUpRight, Lock } from "lucide-react";
 import { ResearchView } from "@/components/research/research-view";
 import { LinkButton, Logo } from "@/components/ui";
-import { readDb } from "@/lib/store";
+import { findShared } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 async function find(token: string) {
   // Tokens are 16+ chars of base64url; reject anything else before touching the store.
   if (!/^[\w-]{12,64}$/.test(token)) return null;
-  return (await readDb()).research.find((r) => r.shareToken === token) ?? null;
+  return findShared(token);
 }
 
 export async function generateMetadata({ params }: PageProps<"/share/[token]">) {
-  const r = await find((await params).token);
-  return { title: r ? r.title : "Report not found", robots: { index: false, follow: false } };
+  const hit = await find((await params).token);
+  return { title: hit ? hit.record.title : "Report not found", robots: { index: false, follow: false } };
 }
 
 export default async function SharedReport({ params }: PageProps<"/share/[token]">) {
-  const record = await find((await params).token);
-  if (!record) notFound();
-  const db = await readDb();
+  const hit = await find((await params).token);
+  if (!hit) notFound();
+  const { db, record } = hit;
   return (
     <div className="min-h-screen bg-grid">
       <header className="no-print sticky top-0 z-20 border-b border-line bg-base/80 backdrop-blur">

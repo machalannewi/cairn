@@ -38,6 +38,9 @@ export default function Landing() {
           <span className="ml-auto hidden items-center gap-2 text-[13px] text-soft sm:flex md:ml-0">
             <span className="h-1.5 w-1.5 rounded-full bg-lime" /> Private beta
           </span>
+          <Link href="/sign-in" className="ml-4 hidden text-[14px] text-soft hover:text-fg sm:block">
+            Sign in
+          </Link>
           <LinkButton href="/app" variant="light" size="md" className="ml-3">
             Open workspace <ArrowRight className="h-4 w-4" />
           </LinkButton>
@@ -183,8 +186,8 @@ export default function Landing() {
         <Label accent className="mb-4">Roadmap</Label>
         <div className="grid gap-4 md:grid-cols-3">
           {[
-            ["Now", "lime", "Uploads, search, cited answers, comparisons, decision briefs, share links"],
-            ["Next", "amber", "Team workspaces, roles and comments on briefs"],
+            ["Now", "lime", "Uploads, search, cited answers, comparisons, decision briefs, share links, team workspaces with roles"],
+            ["Next", "amber", "Comments on briefs, activity feed, semantic search"],
             ["Later", "muted", "Google Drive, Notion, SharePoint and Slack connectors; scheduled re-runs"],
           ].map(([when, tone, what]) => (
             <div key={when} className="panel p-6">

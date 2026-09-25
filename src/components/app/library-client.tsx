@@ -253,7 +253,10 @@ export function DocTable({ docs }: { docs: DocRecord[] }) {
                 <td className="px-5"><Tag>{kindLabel(d.kind)}</Tag></td>
                 <td className="px-5 font-mono text-[12px] text-soft">{d.chunkCount}</td>
                 <td className="px-5 font-mono text-[12px] text-muted">{formatBytes(d.size)}</td>
-                <td className="px-5 font-mono text-[12px] text-muted">{timeAgo(d.uploadedAt)}</td>
+                <td className="px-5 font-mono text-[12px] text-muted">
+                  {timeAgo(d.uploadedAt)}
+                  {d.uploadedBy && <span className="block text-[10.5px] text-dim">{d.uploadedBy.name}</span>}
+                </td>
               </tr>
             ))}
             {shown.length === 0 && (
@@ -264,6 +267,32 @@ export function DocTable({ docs }: { docs: DocRecord[] }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/** Admin-only: remove the seeded Halden sample documents once the team has its own. */
+export function ClearSamples({ count }: { count: number }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-sky/25 bg-sky/[0.04] px-5 py-3.5 text-[13.5px]">
+      <Tag tone="sky">Sample data</Tag>
+      <span className="flex-1 text-soft">
+        This workspace includes {count} sample documents about a fictional company, Halden, so you can try Cairn right away.
+      </span>
+      <button
+        disabled={busy}
+        onClick={async () => {
+          if (!confirm("Remove all sample documents from this workspace?")) return;
+          setBusy(true);
+          await fetch("/api/documents?samples=1", { method: "DELETE" });
+          router.refresh();
+        }}
+        className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.14em] text-sky hover:underline disabled:opacity-50"
+      >
+        {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Remove samples
+      </button>
     </div>
   );
 }

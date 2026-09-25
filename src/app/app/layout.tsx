@@ -1,18 +1,17 @@
 import { Sidebar } from "@/components/app/sidebar";
 import { aiEnabled } from "@/lib/engine";
-import { readDb } from "@/lib/store";
+import { requireWorkspace } from "@/lib/session";
 
 // Workspace data lives on disk and changes on every upload — never prerender.
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
-  const db = await readDb();
+  const { db, isAdmin } = await requireWorkspace();
   return (
     <div className="min-h-screen bg-grid">
       <Sidebar
-        workspace={db.workspace.name}
-        focus={db.workspace.focus}
         ai={aiEnabled()}
+        isAdmin={isAdmin}
         counts={{ docs: db.docs.length, research: db.research.length }}
       />
       <main className="lg:pl-[256px]">

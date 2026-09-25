@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { searchChunks, snippet } from "@/lib/search";
+import { apiWorkspace } from "@/lib/session";
 import { readDb } from "@/lib/store";
 
 export async function GET(req: Request) {
+  const ws = await apiWorkspace();
+  if (ws instanceof NextResponse) return ws;
   const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
   if (!q) return NextResponse.json({ hits: [] });
-  const db = await readDb();
+  const db = await readDb(ws.orgId);
   const hits = searchChunks(q, db.chunks, db.docs, { limit: 25 }).map((h) => ({
     chunkId: h.chunk.id,
     docId: h.doc.id,
