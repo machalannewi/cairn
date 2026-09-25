@@ -52,6 +52,7 @@ export function Sidebar({
         </div>
       </div>
 
+      <div className="scroll-thin min-h-0 flex-1 overflow-y-auto pb-4">
       <div className="px-4 pt-4">
         <LinkButton href="/app/new" className="w-full" onClick={() => setOpen(false)}>
           <Plus className="h-4 w-4" /> New research
@@ -91,22 +92,23 @@ export function Sidebar({
           </div>
         ))}
       </nav>
+      </div>
 
-      <div className="mt-auto space-y-3 p-4">
-        <div className="flex items-center gap-3 px-1">
-          <UserButton showName />
-        </div>
+      {/* Pinned footer: always visible, however short the window */}
+      <div className="shrink-0 space-y-2 border-t border-line p-3">
         <Link
           href="/app/settings"
-          className="block rounded-2xl border border-line bg-ink/50 p-3.5 transition-colors hover:border-line-strong"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-[12.5px] transition-colors hover:bg-panel-2"
+          title={ai ? "Claude connected" : "Add an API key in Settings for synthesis"}
         >
-          <div className="label mb-2">Engine</div>
-          <div className="flex items-center gap-2 text-[13px]">
-            <span className={cx("h-1.5 w-1.5 rounded-full", ai ? "bg-lime animate-pulse-soft" : "bg-amber")} />
-            <span className={ai ? "text-fg" : "text-amber"}>{ai ? "Claude connected" : "Extractive mode"}</span>
-          </div>
-          {!ai && <div className="mt-1 text-[11.5px] text-muted">Add an API key for synthesis</div>}
+          <span className={cx("h-1.5 w-1.5 shrink-0 rounded-full", ai ? "bg-lime animate-pulse-soft" : "bg-amber")} />
+          <span className="label !text-[9.5px]">Engine</span>
+          <span className={cx("ml-auto truncate", ai ? "text-soft" : "text-amber")}>{ai ? "Claude" : "Extractive"}</span>
         </Link>
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden rounded-xl border border-line bg-ink/50 px-2.5 py-2 [&_.cl-userButtonBox]:min-w-0 [&_.cl-userButtonOuterIdentifier]:truncate [&_.cl-userButtonTrigger]:min-w-0 [&_.cl-userButtonTrigger]:max-w-full">
+          <UserButton showName />
+        </div>
       </div>
     </div>
   );

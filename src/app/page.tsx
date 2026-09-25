@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Show, UserButton } from "@clerk/nextjs";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -38,12 +39,26 @@ export default function Landing() {
           <span className="ml-auto hidden items-center gap-2 text-[13px] text-soft sm:flex md:ml-0">
             <span className="h-1.5 w-1.5 rounded-full bg-lime" /> Private beta
           </span>
-          <Link href="/sign-in" className="ml-4 hidden text-[14px] text-soft hover:text-fg sm:block">
-            Sign in
-          </Link>
-          <LinkButton href="/app" variant="light" size="md" className="ml-3">
-            Open workspace <ArrowRight className="h-4 w-4" />
-          </LinkButton>
+          <Show
+            when="signed-in"
+            fallback={
+              <>
+                <Link href="/sign-in" className="ml-4 hidden text-[14px] text-soft hover:text-fg sm:block">
+                  Sign in
+                </Link>
+                <LinkButton href="/sign-up" variant="light" size="md" className="ml-3">
+                  Get started <ArrowRight className="h-4 w-4" />
+                </LinkButton>
+              </>
+            }
+          >
+            <LinkButton href="/app" variant="light" size="md" className="ml-3">
+              Open workspace <ArrowRight className="h-4 w-4" />
+            </LinkButton>
+            <span className="ml-1 flex items-center pr-1">
+              <UserButton />
+            </span>
+          </Show>
         </nav>
       </header>
 

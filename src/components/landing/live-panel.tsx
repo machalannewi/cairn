@@ -81,19 +81,20 @@ export function LivePanel() {
                 <div className="mt-2 font-mono text-[9px] tracking-[0.2em] text-muted">SOURCE / CLAIM / CITATION</div>
               </div>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {[
-                ["Sources", "14", "text-fg"],
-                ["Citations", done ? "Verified" : "Pending", done ? "text-lime" : "text-amber"],
-                ["Confidence", "High", "text-fg"],
-              ].map(([k, v, c]) => (
-                <div key={k} className="rounded-xl border border-line bg-ink/50 px-3 py-2.5">
-                  <div className="font-mono text-[9px] tracking-[0.16em] text-muted uppercase">{k}</div>
-                  <div className={cx("mt-1 font-mono text-[12px] font-semibold uppercase", c)}>{v}</div>
-                </div>
-              ))}
-            </div>
           </div>
+        </div>
+        {/* Stats span the full card width so labels never get squeezed */}
+        <div className="grid grid-cols-3 border-t border-line">
+          {[
+            ["Sources", "14", "text-fg"],
+            ["Citations", done ? "Verified" : "Pending", done ? "text-lime" : "text-amber"],
+            ["Confidence", "High", "text-fg"],
+          ].map(([k, v, c]) => (
+            <div key={k} className="min-w-0 border-r border-line px-5 py-3.5 last:border-r-0">
+              <div className="font-mono text-[9px] tracking-[0.16em] text-muted uppercase">{k}</div>
+              <div className={cx("mt-1 font-mono text-[12px] font-semibold uppercase", c)}>{v}</div>
+            </div>
+          ))}
         </div>
       </div>
       <div className="mt-3 text-right font-mono text-[9.5px] tracking-[0.22em] text-dim">
